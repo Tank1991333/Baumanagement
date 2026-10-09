@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { bildKomprimieren } from './store'
+import { t, holeSprache, SPRACH_CODE } from './i18n'
 
 export function Feld({ label, children, breit }) {
   return (
     <label className={'feld' + (breit ? ' breit' : '')}>
-      <span>{label}</span>
+      <span>{t(label)}</span>
       {children}
     </label>
   )
@@ -13,7 +14,7 @@ export function Feld({ label, children, breit }) {
 export function Kopf({ titel, children }) {
   return (
     <div className="kopf">
-      <h2>{titel}</h2>
+      <h2>{t(titel)}</h2>
       {children && <div className="kopf-aktionen">{children}</div>}
     </div>
   )
@@ -35,11 +36,11 @@ export function Formular({ titel, onSubmit, onAbbrechen, kannLoeschen, onLoesche
       <h3>{titel}</h3>
       <div className="raster">{children}</div>
       <div className="knopfreihe">
-        <button type="submit" className="primaer">Speichern</button>
-        <button type="button" onClick={onAbbrechen}>Abbrechen</button>
+        <button type="submit" className="primaer">{t('Speichern')}</button>
+        <button type="button" onClick={onAbbrechen}>{t('Abbrechen')}</button>
         {extra}
         {kannLoeschen && (
-          <button type="button" className="gefahr rechts" onClick={onLoeschen}>Löschen</button>
+          <button type="button" className="gefahr rechts" onClick={onLoeschen}>{t('Löschen')}</button>
         )}
       </div>
     </form>
@@ -111,8 +112,8 @@ export function Signatur({ label, wert, onChange }) {
       <span>{label}</span>
       <canvas ref={ref} className="signatur" onPointerDown={start} onPointerMove={ziehen} onPointerUp={ende} onPointerCancel={ende} />
       <div className="knopfreihe eng">
-        <span className="leise">{wert ? 'Unterschrieben' : 'Mit dem Finger unterschreiben'}</span>
-        <button type="button" className="klein rechts" onClick={leeren}>Unterschrift löschen</button>
+        <span className="leise">{wert ? '✓' : t('Mit dem Finger unterschreiben')}</span>
+        <button type="button" className="klein rechts" onClick={leeren}>{t('Unterschrift löschen')}</button>
       </div>
     </div>
   )
@@ -148,7 +149,7 @@ export function FotoAuswahl({ fotos, onChange, label = 'Fotos' }) {
         </div>
       )}
       <label className="knopf">
-        {laedt ? 'Fotos werden verkleinert …' : 'Foto aufnehmen oder auswählen'}
+        {laedt ? '…' : t('Foto aufnehmen oder auswählen')}
         <input type="file" accept="image/*" multiple hidden onChange={neu} />
       </label>
     </div>
@@ -176,6 +177,59 @@ export function Zeilen({ zeilen, spalten, onChange, neu }) {
         </div>
       ))}
       <button type="button" className="klein" onClick={() => onChange([...zeilen, { ...neu }])}>Zeile hinzufügen</button>
+    </div>
+  )
+}
+
+export function Diktat({ onText }) {
+  const [an, setAn] = useState(false)
+  const rec = useRef(null)
+  const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+  useEffect(() => () => rec.current?.stop(), [])
+  if (!SR) return null
+  const start = () => {
+    try {
+      const r = new SR()
+      r.lang = SPRACH_CODE[holeSprache()] || 'de-AT'
+      r.continuous = true
+      r.interimResults = false
+      r.onresult = e => {
+        for (let i = e.resultIndex; i < e.results.length; i++)
+          if (e.results[i].isFinal) onText(e.results[i][0].transcript.trim())
+      }
+      r.onend = () => setAn(false)
+      r.onerror = () => setAn(false)
+      r.start()
+      rec.current = r
+      setAn(true)
+    } catch {
+      setAn(false)
+    }
+  }
+  const stop = () => {
+    rec.current?.stop()
+    setAn(false)
+  }
+  return (
+    <button type="button" className={'klein diktat' + (an ? ' an' : '')} onClick={an ? stop : start} aria-pressed={an}>
+      {an ? '■ ' + t('Stopp') : '🎤 ' + t('Diktieren')}
+    </button>
+  )
+}
+
+// Mehrzeiliges Feld mit Diktierknopf
+export function TextFeld({ label, value, onChange, rows = 3, placeholder }) {
+  const wert = useRef(value)
+  const aendern = useRef(onChange)
+  wert.current = value
+  aendern.current = onChange
+  return (
+    <div className="feld breit">
+      <span className="feld-kopf">
+        <span>{t(label)}</span>
+        <Diktat onText={x => aendern.current((wert.current ? wert.current.trimEnd() + ' ' : '') + x)} />
+      </span>
+      <textarea rows={rows} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} aria-label={t(label)} />
     </div>
   )
 }

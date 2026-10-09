@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDaten, heute, fmtDatum, erinnerungen } from './store'
 import { syncVerfuegbar, holeSitzung, synchronisieren } from './sync'
+import { t, setzeSprache } from './i18n'
+import Kunde from './views/Kunde.jsx'
 import Uebersicht from './views/Uebersicht.jsx'
 import Baustellen from './views/Baustellen.jsx'
 import Zeiten from './views/Zeiten.jsx'
@@ -18,9 +20,9 @@ const BEREICHE = [
   ['zeiten', 'Zeiten', Zeiten],
   ['plan', 'Plantafel', Plan],
   ['tagebuch', 'Bautagebuch', Tagebuch],
-  ['maengel', 'Mängel & Abnahme', Maengel],
-  ['regie', 'Regieberichte', Regie],
-  ['fotos', 'Fotos', Fotos],
+  ['maengel', 'Mängel & Übernahme', Maengel],
+  ['regie', 'Regie & Aufmaß', Regie],
+  ['fotos', 'Fotos & Pläne', Fotos],
   ['material', 'Material & Geräte', Material],
   ['team', 'Team', Team],
 ]
@@ -29,12 +31,30 @@ const THEMA_KEY = 'bauapp-thema'
 const ALLE_RECHTE = { chef: true, kosten: true, alleZeiten: true, planen: true, stammdaten: true }
 const KEINE_RECHTE = { chef: false, kosten: false, alleZeiten: false, planen: false, stammdaten: false }
 
+const SPRACH_KEY = 'bauapp-sprache'
+
 export default function App() {
+  const bauherr = new URLSearchParams(window.location.search).get('bauherr')
+  if (bauherr) return <Kunde token={bauherr} />
+  return <Haupt />
+}
+
+function Haupt() {
   const [daten, setDaten, speicherFehler] = useDaten()
   const [bereich, setBereich] = useState('uebersicht')
   const [konto, setKonto] = useState(holeSitzung())
   const [sync, setSync] = useState({ zustand: 'aus' })
   const [thema, setThemaState] = useState(() => localStorage.getItem(THEMA_KEY) || 'auto')
+  const [sprache, setSpracheState] = useState(() => {
+    const s = localStorage.getItem(SPRACH_KEY) || 'de'
+    setzeSprache(s)
+    return s
+  })
+  const setSprache = s => {
+    setzeSprache(s)
+    setSpracheState(s)
+    try { localStorage.setItem(SPRACH_KEY, s) } catch { /* egal */ }
+  }
 
   const datenRef = useRef(daten)
   datenRef.current = daten
@@ -142,14 +162,14 @@ export default function App() {
             aria-current={id === bereich ? 'page' : undefined}
             onClick={() => gehe(id)}
           >
-            {name}
+            {t(name)}
           </button>
         ))}
       </nav>
 
       {speicherFehler && <div className="hinweis-fehler" role="alert">{speicherFehler}</div>}
 
-      <main className="inhalt">
+      <main className="inhalt" key={sprache}>
         <Ansicht
           daten={daten}
           setDaten={setDaten}
@@ -162,6 +182,8 @@ export default function App() {
           sync={sync}
           jetztSync={jetztSync}
           thema={thema}
+          sprache={sprache}
+          setSprache={setSprache}
           setThema={setThema}
         />
       </main>

@@ -5,9 +5,10 @@ const KEY = 'bauapp-daten-v1'
 export const SAMMLUNGEN = [
   'baustellen', 'mitarbeiter', 'zeiten', 'tagebuch', 'maengel', 'stempel',
   'fotos', 'regie', 'plan', 'bestellungen', 'geraete', 'abnahmen',
+  'behinderungen', 'aufmass', 'dokumente', 'abwesenheiten', 'unterweisungen',
 ]
 
-export const leer = { firma: '', ...Object.fromEntries(SAMMLUNGEN.map(s => [s, []])) }
+export const leer = { firma: '', einstellungen: { gpsStempeln: false }, ...Object.fromEntries(SAMMLUNGEN.map(s => [s, []])) }
 export const neuLeer = () => JSON.parse(JSON.stringify(leer))
 
 export const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
@@ -32,10 +33,10 @@ export function wochenStart(datum = heute()) {
 }
 
 export const fmtDatum = s =>
-  s ? new Date(s + 'T00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
-export const fmtKurz = s => (s ? new Date(s + 'T00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '')
-export const fmtStd = h => (Math.round((h || 0) * 100) / 100).toLocaleString('de-DE') + ' h'
-export const fmtEuro = x => (Number(x) || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+  s ? new Date(s + 'T00:00').toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
+export const fmtKurz = s => (s ? new Date(s + 'T00:00').toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '')
+export const fmtStd = h => (Math.round((h || 0) * 100) / 100).toLocaleString('de-AT') + ' h'
+export const fmtEuro = x => (Number(x) || 0).toLocaleString('de-AT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
 export const zahl = x => Number(String(x ?? '').replace(',', '.')) || 0
 
 export function stunden(von, bis, pauseMin = 0) {
@@ -47,8 +48,82 @@ export function stunden(von, bis, pauseMin = 0) {
   return Math.max(0, Math.round(((min - (Number(pauseMin) || 0)) / 60) * 100) / 100)
 }
 
-// Pause nach Arbeitszeitgesetz: über 6 h → 30 Min, über 9 h → 45 Min
-export const pauseNachArbZG = bruttoStd => (bruttoStd > 9 ? 45 : bruttoStd > 6 ? 30 : 0)
+// Ruhepause nach § 11 AZG (Österreich): bei mehr als 6 Stunden Arbeitszeit mindestens 30 Minuten
+export const pauseNachAZG = bruttoStd => (bruttoStd > 6 ? 30 : 0)
+
+const zwei = n => String(n).padStart(2, '0')
+function ostersonntag(j) {
+  const a = j % 19, b = Math.floor(j / 100), c = j % 100, d = Math.floor(b / 4), e = b % 4
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const n = h + l - 7 * m + 114
+  return `${j}-${zwei(Math.floor(n / 31))}-${zwei((n % 31) + 1)}`
+}
+const feiertagCache = {}
+// Gesetzliche Feiertage in Österreich
+export function feiertage(j) {
+  if (feiertagCache[j]) return feiertagCache[j]
+  const f = {}
+  ;[['01-01', 'Neujahr'], ['01-06', 'Heilige Drei Könige'], ['05-01', 'Staatsfeiertag'], ['08-15', 'Mariä Himmelfahrt'],
+    ['10-26', 'Nationalfeiertag'], ['11-01', 'Allerheiligen'], ['12-08', 'Mariä Empfängnis'], ['12-25', 'Christtag'],
+    ['12-26', 'Stefanitag']].forEach(([d, n]) => (f[`${j}-${d}`] = n))
+  const o = ostersonntag(j)
+  f[plusTage(o, 1)] = 'Ostermontag'
+  f[plusTage(o, 39)] = 'Christi Himmelfahrt'
+  f[plusTage(o, 50)] = 'Pfingstmontag'
+  f[plusTage(o, 60)] = 'Fronleichnam'
+  return (feiertagCache[j] = f)
+}
+export const feiertag = d => (d ? feiertage(+d.slice(0, 4))[d] : undefined)
+export const istArbeitstag = d => {
+  const w = new Date(d + 'T12:00').getDay()
+  return w !== 0 && w !== 6 && !feiertag(d)
+}
+
+export const ABWESENHEIT = ['Urlaub', 'Krankenstand', 'Zeitausgleich', 'Schulung', 'Sonstiges']
+export const abwesendAm = (d, maId, datum) =>
+  d.abwesenheiten.find(a => a.mitarbeiterId === maId && a.von <= datum && datum <= (a.bis || a.von))
+
+export function schlechtwetterStunden(d, maId, von, bis) {
+  return d.tagebuch
+    .filter(t => t.datum >= von && t.datum <= bis && t.schlechtwetter?.stunden && (t.schlechtwetter.mitarbeiter || []).includes(maId))
+    .reduce((s, t) => s + zahl(t.schlechtwetter.stunden), 0)
+}
+
+// Stundenkonto: Soll aus Wochenstunden (Bau-KV: 39 h), Urlaub/Krankenstand/Schulung gelten als erfüllt,
+// Schlechtwetterstunden werden gutgeschrieben, Zeitausgleich baut Guthaben ab.
+// Standard: bis gestern, damit der laufende Tag das Konto nicht ins Minus zieht
+export function stundenkonto(d, maId, bis = plusTage(heute(), -1)) {
+  const m = d.mitarbeiter.find(x => x.id === maId)
+  if (!m) return null
+  const erste = d.zeiten.filter(z => z.mitarbeiterId === maId).reduce((min, z) => (z.datum < min ? z.datum : min), bis)
+  const start = m.kontoStart || erste
+  const tagesSoll = (zahl(m.wochenstunden) || 39) / 5
+  let soll = 0, gutschrift = 0
+  for (let t = start; t <= bis; t = plusTage(t, 1)) {
+    if (!istArbeitstag(t)) continue
+    soll += tagesSoll
+    const a = abwesendAm(d, maId, t)
+    if (a && a.art !== 'Zeitausgleich') gutschrift += tagesSoll
+  }
+  const ist = d.zeiten.filter(z => z.mitarbeiterId === maId && z.datum >= start && z.datum <= bis).reduce((s, z) => s + z.stunden, 0)
+  const sw = schlechtwetterStunden(d, maId, start, bis)
+  return { start, soll, ist, gutschrift, schlechtwetter: sw, saldo: zahl(m.startSaldo) + ist + gutschrift + sw - soll }
+}
+
+export function entfernungM(a, b) {
+  if (!a || !b || a.lat == null || b.lat == null) return null
+  const r = 6371000, rad = x => (x * Math.PI) / 180
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2
+  return Math.round(2 * r * Math.asin(Math.sqrt(h)))
+}
+
+export const zufall = (n = 24) => {
+  const z = new Uint8Array(n)
+  crypto.getRandomValues(z)
+  return [...z].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join('')
+}
 
 export const add = (set, key, item) => set(d => ({ ...d, [key]: [{ ...item, id: uid() }, ...d[key]] }))
 export const upd = (set, key, id, patch) =>
@@ -61,6 +136,7 @@ export function migrieren(roh) {
     x.stempel = Object.entries(x.stempel).map(([id, s]) => ({ id, mitarbeiterId: id, ...s }))
   }
   for (const s of SAMMLUNGEN) if (!Array.isArray(x[s])) x[s] = []
+  x.einstellungen = { ...leer.einstellungen, ...(x.einstellungen || {}) }
   x.maengel = x.maengel.map(m => {
     if (Array.isArray(m.fotos)) return m
     const { foto, ...rest } = m
@@ -168,11 +244,11 @@ export function erinnerungen(d, rolle = 'chef') {
     .forEach(b => r.push({ id: 'b' + b.id, rot: b.liefertermin < h, text: `Lieferung: ${b.artikel}`, info: `${bs(b.baustelleId)}, erwartet ${fmtDatum(b.liefertermin)}`, ziel: 'material' }))
   d.geraete
     .filter(g => g.naechstePruefung && g.naechstePruefung <= in14)
-    .forEach(g => r.push({ id: 'g' + g.id, rot: g.naechstePruefung < h, text: `Prüfung: ${g.name}`, info: `fällig ${fmtDatum(g.naechstePruefung)}`, ziel: 'material' }))
+    .forEach(g => r.push({ id: 'g' + g.id, rot: g.naechstePruefung < h, text: `Prüfung (AM-VO): ${g.name}`, info: `fällig ${fmtDatum(g.naechstePruefung)}`, ziel: 'material' }))
   if (rolle === 'chef')
     d.mitarbeiter
       .filter(m => m.aktiv !== false && (!m.unterweisung || m.unterweisung < vorEinemJahr))
-      .forEach(m => r.push({ id: 'u' + m.id, rot: false, text: `Sicherheitsunterweisung: ${m.name}`, info: m.unterweisung ? `zuletzt ${fmtDatum(m.unterweisung)}` : 'noch nicht eingetragen', ziel: 'team' }))
+      .forEach(m => r.push({ id: 'u' + m.id, rot: false, text: `Unterweisung (§ 14 ASchG): ${m.name}`, info: m.unterweisung ? `zuletzt ${fmtDatum(m.unterweisung)}` : 'noch nicht eingetragen', ziel: 'team' }))
   return r.sort((a, b) => Number(b.rot) - Number(a.rot))
 }
 
@@ -183,28 +259,29 @@ function beispielDaten() {
     ...neuLeer(),
     firma: 'Musterbau GmbH',
     baustellen: [
-      { id: b1, name: 'EFH Familie Becker', adresse: 'Lindenweg 12, 74072 Heilbronn', kunde: 'Thomas Becker', ansprechpartner: 'Herr Becker', telefon: '0171 2345678', start: h, ende: '', status: 'laufend', notiz: 'Rohbau, Keller in WU-Beton', angebot: '186000', sollStunden: '1400' },
-      { id: b2, name: 'Sanierung Rathaus Ost', adresse: 'Marktplatz 1, 74072 Heilbronn', kunde: 'Stadt Heilbronn', ansprechpartner: 'Frau Kaya, Hochbauamt', telefon: '07131 560', start: '', ende: '', status: 'geplant', notiz: '', angebot: '', sollStunden: '' },
+      { id: b1, name: 'EFH Familie Huber', adresse: 'Petersgasse 40, 8010 Graz', kunde: 'Thomas Huber', ansprechpartner: 'Herr Huber', telefon: '0664 1234567', lat: 47.0625, lon: 15.4655, start: h, ende: '', status: 'laufend', notiz: 'Rohbau, Keller in WU-Beton', angebot: '186000', sollStunden: '1400' },
+      { id: b2, name: 'Sanierung Volksschule', adresse: 'Hauptplatz 1, 8020 Graz', kunde: 'Stadt Graz', ansprechpartner: 'Frau Kaya, Hochbau', telefon: '0316 8720', start: '', ende: '', status: 'geplant', notiz: '', angebot: '', sollStunden: '' },
     ],
     mitarbeiter: [
-      { id: m1, name: 'Jürgen Maier', rolle: 'Polier', telefon: '0160 1112223', stundensatz: '48', personalnummer: '101', email: '', unterweisung: plusTage(h, -100), aktiv: true },
-      { id: m2, name: 'Ali Demir', rolle: 'Facharbeiter', telefon: '', stundensatz: '42', personalnummer: '102', email: '', unterweisung: '', aktiv: true },
-      { id: m3, name: 'Lukas Weber', rolle: 'Azubi', telefon: '', stundensatz: '22', personalnummer: '103', email: '', unterweisung: plusTage(h, -40), aktiv: true },
+      { id: m1, name: 'Josef Maier', rolle: 'Polier', telefon: '0676 1112223', wochenstunden: '39', stundensatz: '48', personalnummer: '101', email: '', unterweisung: plusTage(h, -100), aktiv: true },
+      { id: m2, name: 'Ali Demir', rolle: 'Facharbeiter', telefon: '', wochenstunden: '39', stundensatz: '42', personalnummer: '102', email: '', unterweisung: '', aktiv: true },
+      { id: m3, name: 'Lukas Weber', rolle: 'Lehrling', telefon: '', wochenstunden: '39', stundensatz: '22', personalnummer: '103', email: '', unterweisung: plusTage(h, -40), aktiv: true },
     ],
     zeiten: [
       { id: uid(), datum: plusTage(h, -1), mitarbeiterId: m1, baustelleId: b1, von: '07:00', bis: '16:30', pause: 45, taetigkeit: 'Schalung Bodenplatte', stunden: 8.75 },
       { id: uid(), datum: plusTage(h, -1), mitarbeiterId: m2, baustelleId: b1, von: '07:00', bis: '16:00', pause: 30, taetigkeit: 'Bewehrung', stunden: 8.5 },
     ],
     plan: [m1, m2, m3].map(m => ({ id: `${h}_${m}`, datum: h, mitarbeiterId: m, baustelleId: b1 })),
+    abwesenheiten: [{ id: uid(), mitarbeiterId: m3, von: plusTage(h, 3), bis: plusTage(h, 4), art: 'Schulung', notiz: 'Berufsschule' }],
     maengel: [
       { id: uid(), typ: 'Aufgabe', titel: 'Bewehrungsabnahme Bodenplatte anmelden', beschreibung: 'Prüfstatiker anrufen, Termin vor dem Betonieren', baustelleId: b1, verantwortlichId: m1, frist: h, dringend: true, fotos: [], erledigt: false },
     ],
     bestellungen: [
-      { id: uid(), baustelleId: b1, artikel: 'Transportbeton C30/37 WU', menge: '24', einheit: 'm³', lieferant: 'Betonwerk Neckar', liefertermin: plusTage(h, 2), status: 'bestellt', preis: '3600' },
+      { id: uid(), baustelleId: b1, artikel: 'Transportbeton C30/37 WU', menge: '24', einheit: 'm³', lieferant: 'Betonwerk Mur', liefertermin: plusTage(h, 2), status: 'bestellt', preis: '3600' },
     ],
     geraete: [
       { id: uid(), name: 'Rüttelplatte 90 kg', inventarnr: 'G-014', standort: b1, naechstePruefung: plusTage(h, 10), notiz: '' },
-      { id: uid(), name: 'Baustromverteiler', inventarnr: 'E-003', standort: 'lager', naechstePruefung: plusTage(h, 120), notiz: 'DGUV V3' },
+      { id: uid(), name: 'Baustromverteiler', inventarnr: 'E-003', standort: 'lager', naechstePruefung: plusTage(h, 120), notiz: 'Elektro-Prüfung' },
     ],
   }
 }

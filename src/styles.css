@@ -252,3 +252,36 @@ input:focus, select:focus, textarea:focus { border-color: var(--stahl); }
 .recht input { width: 24px; height: 24px; min-height: 0; margin: 0; flex: none; accent-color: var(--gruen); }
 .recht > span { display: flex; flex-direction: column; }
 .recht:has(input:checked) { border-color: var(--gruen); background: var(--gruen-hell); }
+
+/* Erweiterungen Österreich-Ausbau */
+.feld-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.feld-kopf > span { font-size: 14px; font-weight: 600; color: var(--stahl); }
+.diktat { min-height: 32px; padding: 0 10px; font-size: 13px; }
+.diktat.an { background: var(--rot); border-color: var(--rot); color: #fff; animation: puls 1.2s ease-in-out infinite; }
+@keyframes puls { 50% { opacity: .65; } }
+.schlechtwetter { border: 1.5px solid var(--linie); border-radius: 8px; padding: 10px 12px 12px; gap: 10px; }
+.schlechtwetter legend { padding: 0 6px; }
+.saldo { font: 700 22px var(--titel); font-variant-numeric: tabular-nums; }
+.saldo.minus { color: var(--rot); }
+.saldo.plus { color: var(--gruen); }
+.tafel thead th span { display: block; font: 400 12px var(--schrift); }
+.tafel thead th.feiertag { background: var(--rot-hell); }
+.tafel td.gesperrt { background: repeating-linear-gradient(135deg, var(--flaeche2) 0 6px, transparent 6px 12px); }
+.tafel td.gesperrt span { font-size: 13px; font-weight: 600; color: var(--stahl); padding: 0 4px; }
+.marke.abw-urlaub { background: #b8d8f0; color: #18222e; }
+.marke.abw-krankenstand { background: #f1c6b5; color: #18222e; }
+.marke.abw-zeitausgleich { background: #d6e7b3; color: #18222e; }
+.aufmass-zeilen { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.aufmass-zeile { display: grid; grid-template-columns: minmax(120px, 3fr) repeat(4, minmax(48px, 1fr)) minmax(64px, 1fr) auto; gap: 6px; width: 100%; align-items: center; }
+.aufmass-zeile input { min-width: 0; padding: 8px 6px; }
+.am-menge { justify-content: flex-end; font-variant-numeric: tabular-nums; min-height: 44px; padding: 0 6px; }
+@media (max-width: 560px) { .aufmass-zeile { grid-template-columns: repeat(4, 1fr) auto; } .aufmass-zeile .am-text { grid-column: 1 / -1; } .am-menge { grid-column: 1 / 5; } }
+.linkknopf { border: 0; background: none; padding: 0; min-height: 0; color: var(--tinte); text-decoration: underline; font-weight: 600; text-align: left; }
+.ocr-text { white-space: pre-wrap; font-size: 13px; max-height: 200px; overflow: auto; background: var(--flaeche2); padding: 8px; border-radius: 6px; }
+.foto { max-width: min(100%, 320px); border-radius: 6px; border: 1px solid var(--linie); display: block; }
+.recht.gps { margin-top: 14px; max-width: 640px; }
+.raster > .recht { grid-column: 1 / -1; }
+.kunde .kennzahlen .kz { background: var(--flaeche); padding: 16px; display: flex; flex-direction: column; gap: 2px; }
+.kunde h2 { font-size: 24px; margin-bottom: 8px; }
+.balken.gross { height: 14px; margin-top: 12px; border-radius: 7px; }
+.kunden-info { white-space: pre-line; background: var(--flaeche); border: 1px solid var(--linie); border-radius: 8px; padding: 14px; margin: 0; }

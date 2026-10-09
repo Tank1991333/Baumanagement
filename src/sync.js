@@ -108,7 +108,7 @@ export async function firmaBeitreten(code) {
 function eintraegeVon(daten) {
   const m = new Map()
   for (const s of SAMMLUNGEN) for (const x of daten[s]) m.set(`${s}:${x.id}`, { sammlung: s, id: x.id, obj: x })
-  if (daten.firma) m.set('meta:firma', { sammlung: 'meta', id: 'firma', obj: { id: 'firma', name: daten.firma } })
+  if (daten.firma) m.set('meta:firma', { sammlung: 'meta', id: 'firma', obj: { id: 'firma', name: daten.firma, ...daten.einstellungen } })
   return m
 }
 
@@ -133,8 +133,10 @@ function anwenden(d, zeilen, korrekturen, stand) {
     const k = `${r.sammlung}:${r.id}`
     if (r.sammlung === 'meta') {
       if (!r.geloescht && r.daten?.name) {
-        erg.firma = r.daten.name
-        stand[k] = JSON.stringify({ id: 'firma', name: erg.firma })
+        const { id, name, ...einstellungen } = r.daten
+        erg.firma = name
+        erg.einstellungen = { ...erg.einstellungen, ...einstellungen }
+        stand[k] = JSON.stringify({ id: 'firma', name, ...erg.einstellungen })
         geaendert = true
       }
       return
@@ -241,4 +243,46 @@ export async function synchronisieren(holeDaten, setDaten) {
   cursorAlle[firma.id] = cursor
   schreibe(CK, cursorAlle)
   return kontoGeaendert
+}
+
+// Dateien (Pläne, Dokumente) im Supabase-Speicher, Ordner = Firma
+const BUCKET = 'dokumente'
+export async function dateiHochladen(datei) {
+  const pfad = `${sitzung.firma.id}/${Date.now().toString(36)}-${datei.name.replace(/[^\w.\-]+/g, '_')}`
+  const r = await fetch(`${BASIS}/storage/v1/object/${BUCKET}/${pfad}`, {
+    method: 'POST',
+    headers: { apikey: SCHLUESSEL, Authorization: `Bearer ${await token()}`, 'Content-Type': datei.type || 'application/octet-stream', 'x-upsert': 'false' },
+    body: datei,
+  })
+  if (!r.ok) throw new Error(fehlerText(await r.json().catch(() => ({})), r.status))
+  return pfad
+}
+export async function dateiLink(pfad) {
+  const r = await fetch(`${BASIS}/storage/v1/object/sign/${BUCKET}/${pfad}`, {
+    method: 'POST',
+    headers: { apikey: SCHLUESSEL, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiresIn: 3600 }),
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(fehlerText(j, r.status))
+  const url = j.signedURL || j.signedUrl
+  return url.startsWith('http') ? url : `${BASIS}/storage/v1${url}`
+}
+export async function dateiLoeschen(pfad) {
+  await fetch(`${BASIS}/storage/v1/object/${BUCKET}/${pfad}`, {
+    method: 'DELETE',
+    headers: { apikey: SCHLUESSEL, Authorization: `Bearer ${await token()}` },
+  })
+}
+
+// Öffentliche Bauherren-Ansicht: ohne Login, nur mit dem geheimen Link
+export async function kundenAnsicht(tokenWert) {
+  const r = await fetch(`${BASIS}/rest/v1/rpc/kunden_ansicht`, {
+    method: 'POST',
+    headers: { apikey: SCHLUESSEL, Authorization: `Bearer ${SCHLUESSEL}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_token: tokenWert }),
+  })
+  const j = await r.json().catch(() => null)
+  if (!r.ok) throw new Error(fehlerText(j || {}, r.status))
+  return j
 }
