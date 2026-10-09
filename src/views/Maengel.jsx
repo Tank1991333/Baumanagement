@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { add, upd, del, heute, fmtDatum, esc, absatz, drucken, unterschriftHtml } from '../store'
-import { Feld, Kopf, Leer, Formular, FotoAuswahl, Signatur, BaustellenAuswahl } from '../ui.jsx'
+import { Feld, Kopf, Leer, Formular, FotoAuswahl, Signatur, BaustellenAuswahl, TextFeld } from '../ui.jsx'
+import { t } from '../i18n'
 
 const ERGEBNIS = {
-  abgenommen: 'Abgenommen',
-  vorbehalt: 'Abgenommen unter Vorbehalt der aufgeführten Mängel',
-  verweigert: 'Abnahme verweigert wegen wesentlicher Mängel',
+  abgenommen: 'Übernommen',
+  vorbehalt: 'Übernommen unter Vorbehalt der aufgeführten Mängel',
+  verweigert: 'Übernahme verweigert wegen wesentlicher Mängel',
 }
 
-const KURZ = { abgenommen: 'abgenommen', vorbehalt: 'unter Vorbehalt', verweigert: 'verweigert' }
+const KURZ = { abgenommen: 'übernommen', vorbehalt: 'unter Vorbehalt', verweigert: 'verweigert' }
 
 export default function Maengel({ daten, setDaten }) {
   const [form, setForm] = useState(null)
@@ -41,7 +42,7 @@ export default function Maengel({ daten, setDaten }) {
   const neueAbnahme = () => {
     const baustelleId = filterBs !== 'alle' ? filterBs : daten.baustellen[0]?.id ?? ''
     setAbnahme({
-      baustelleId, datum: h, art: 'Förmliche Abnahme nach § 12 VOB/B', teilnehmer: '',
+      baustelleId, datum: h, art: 'Förmliche Übernahme nach ÖNORM B 2110', teilnehmer: '',
       ergebnis: 'vorbehalt', bemerkung: '', nameAN: '', nameAG: bsObj(baustelleId)?.kunde ?? '',
       unterschriftAN: '', unterschriftAG: '',
     })
@@ -65,7 +66,7 @@ export default function Maengel({ daten, setDaten }) {
           .map((m, i) => `<tr><td>${i + 1}</td><td><b>${esc(m.titel)}</b>${m.beschreibung ? '<br>' + absatz(m.beschreibung) : ''}</td><td>${esc(fmtDatum(m.frist))}</td></tr>`)
           .join('')}</table>`
       : '<p>Keine Mängel festgestellt.</p>'
-    drucken('Abnahmeprotokoll', `
+    drucken('Übernahmeprotokoll', `
       <table class="k">
         <tr><td>Bauvorhaben</td><td>${esc(b?.name ?? '–')}<br>${esc(b?.adresse ?? '')}</td></tr>
         <tr><td>Auftraggeber</td><td>${esc(b?.kunde ?? '')}</td></tr>
@@ -77,7 +78,7 @@ export default function Maengel({ daten, setDaten }) {
       </table>
       <h2>Festgestellte Mängel</h2>${liste}
       ${a.bemerkung ? `<h2>Bemerkungen und Vorbehalte</h2><p>${absatz(a.bemerkung)}</p>` : ''}
-      <p style="font-size:9pt;margin-top:18px">Mit der Abnahme beginnt die Verjährungsfrist für Mängelansprüche, und die Gefahr geht auf den Auftraggeber über. Vorbehalte wegen bekannter Mängel und Vertragsstrafen sind bei der Abnahme zu erklären.</p>
+      <p style="font-size:9pt;margin-top:18px">Mit der Übernahme gehen in der Regel die Gefahr auf den Auftraggeber über und die Gewährleistungsfrist beginnt zu laufen. Bekannte Mängel und Vorbehalte (z. B. Vertragsstrafe/Pönale) sind im Protokoll festzuhalten.</p>
       <div class="sig">${unterschriftHtml(a.unterschriftAG, 'Auftraggeber: ' + (a.nameAG || ''))}${unterschriftHtml(a.unterschriftAN, 'Auftragnehmer: ' + (a.nameAN || ''))}</div>`, daten.firma)
   }
 
@@ -93,12 +94,12 @@ export default function Maengel({ daten, setDaten }) {
     <>
       <Kopf titel="Mängel & Aufgaben">
         <select value={status} onChange={e => setStatus(e.target.value)} aria-label="Status filtern">
-          <option value="offen">Offen</option>
-          <option value="erledigt">Erledigt</option>
-          <option value="alle">Alle</option>
+          <option value="offen">{t('Offen')}</option>
+          <option value="erledigt">{t('Erledigt')}</option>
+          <option value="alle">{t('Alle')}</option>
         </select>
         <BaustellenAuswahl daten={daten} value={filterBs} onChange={setFilterBs} alle label="Baustelle filtern" />
-        {!form && !abnahme && <button className="primaer" onClick={neu}>Neu erfassen</button>}
+        {!form && !abnahme && <button className="primaer" onClick={neu}>{t('Neu erfassen')}</button>}
       </Kopf>
 
       {form && (
@@ -114,11 +115,11 @@ export default function Maengel({ daten, setDaten }) {
           </Feld>
           <Feld label="Dringlichkeit">
             <select value={form.dringend ? 'ja' : 'nein'} onChange={e => setForm({ ...form, dringend: e.target.value === 'ja' })}>
-              <option value="nein">Normal</option><option value="ja">Dringend</option>
+              <option value="nein">Normal</option><option value="ja">{t('Dringend')}</option>
             </select>
           </Feld>
           <Feld label="Kurzbeschreibung *" breit><input required value={form.titel} onChange={f('titel')} placeholder="z. B. Riss in Wand Treppenhaus EG" /></Feld>
-          <Feld label="Details, Ort im Gebäude" breit><textarea rows="3" value={form.beschreibung} onChange={f('beschreibung')} /></Feld>
+          <TextFeld label="Details, Ort im Gebäude" value={form.beschreibung} onChange={v => setForm(x => ({ ...x, beschreibung: v }))} />
           <Feld label="Baustelle">
             <BaustellenAuswahl daten={daten} value={form.baustelleId} onChange={v => setForm({ ...form, baustelleId: v })} />
           </Feld>
@@ -167,13 +168,13 @@ export default function Maengel({ daten, setDaten }) {
       )}
 
       <section className="block">
-        <Kopf titel="Abnahmeprotokolle">
-          {!abnahme && !form && daten.baustellen.length > 0 && <button onClick={neueAbnahme}>Abnahme protokollieren</button>}
+        <Kopf titel="Übernahmeprotokolle">
+          {!abnahme && !form && daten.baustellen.length > 0 && <button onClick={neueAbnahme}>Übernahme protokollieren</button>}
         </Kopf>
 
         {abnahme && (
           <Formular
-            titel={abnahme.id ? 'Abnahmeprotokoll bearbeiten' : 'Abnahme protokollieren'}
+            titel={abnahme.id ? 'Übernahmeprotokoll bearbeiten' : 'Übernahme protokollieren'}
             onSubmit={abnahmeSpeichern}
             onAbbrechen={() => setAbnahme(null)}
             kannLoeschen={!!abnahme.id}
@@ -185,9 +186,9 @@ export default function Maengel({ daten, setDaten }) {
             <Feld label="Datum"><input type="date" value={abnahme.datum} onChange={fa('datum')} /></Feld>
             <Feld label="Art">
               <select value={abnahme.art} onChange={fa('art')}>
-                <option>Förmliche Abnahme nach § 12 VOB/B</option>
-                <option>Teilabnahme</option>
-                <option>Abnahme nach § 640 BGB</option>
+                <option>Förmliche Übernahme nach ÖNORM B 2110</option>
+                <option>Teilübernahme nach ÖNORM B 2110</option>
+                <option>Übernahme (Werkvertrag nach ABGB)</option>
               </select>
             </Feld>
             <Feld label="Teilnehmer" breit><textarea rows="2" value={abnahme.teilnehmer} onChange={fa('teilnehmer')} placeholder="Name und Funktion, je Zeile eine Person" /></Feld>
@@ -200,7 +201,7 @@ export default function Maengel({ daten, setDaten }) {
               Ins Protokoll kommen automatisch alle offenen Mängel dieser Baustelle
               ({daten.maengel.filter(m => m.baustelleId === abnahme.baustelleId && !m.erledigt && m.typ === 'Mangel').length} Stück). Erfasse vorher alles, was bei der Begehung auffällt.
             </p>
-            <Feld label="Bemerkungen, Vorbehalte (z. B. Vertragsstrafe)" breit><textarea rows="2" value={abnahme.bemerkung} onChange={fa('bemerkung')} /></Feld>
+            <TextFeld label="Bemerkungen, Vorbehalte (z. B. Pönale)" value={abnahme.bemerkung} onChange={v => setAbnahme(a => ({ ...a, bemerkung: v }))} rows={2} />
             <Feld label="Name Auftraggeber"><input value={abnahme.nameAG} onChange={fa('nameAG')} /></Feld>
             <Feld label="Name Auftragnehmer"><input value={abnahme.nameAN} onChange={fa('nameAN')} /></Feld>
             <Signatur label="Unterschrift Auftraggeber" wert={abnahme.unterschriftAG} onChange={v => setAbnahme(a => ({ ...a, unterschriftAG: v }))} />
@@ -209,7 +210,7 @@ export default function Maengel({ daten, setDaten }) {
         )}
 
         {abnahmen.length === 0 ? (
-          <Leer titel="Noch keine Abnahmen" text="Das Protokoll übernimmt die offenen Mängel, wird vor Ort unterschrieben und lässt sich als PDF speichern." />
+          <Leer titel="Noch keine Übernahmen" text="Das Protokoll übernimmt die offenen Mängel, wird vor Ort unterschrieben und lässt sich als PDF speichern." />
         ) : (
           <ul className="liste">
             {abnahmen.map(a => (

@@ -1,10 +1,23 @@
 import { useState } from 'react'
 import { uid, heute, fmtDatum, bildKomprimieren, upd, del, esc, drucken } from '../store'
 import { Kopf, Leer, BaustellenAuswahl } from '../ui.jsx'
+import Dokumente from './Dokumente.jsx'
+import { t } from '../i18n'
 
 const BEREICHE = ['Allgemein', 'Erdarbeiten', 'Fundament', 'Rohbau', 'Dach', 'Fassade', 'Innenausbau', 'Haustechnik', 'Außenanlagen', 'Schaden / Mangel']
 
-export default function Fotos({ daten, setDaten }) {
+export default function Fotos(props) {
+  return (
+    <>
+      <FotoBereich {...props} />
+      <section className="block">
+        <Dokumente {...props} />
+      </section>
+    </>
+  )
+}
+
+function FotoBereich({ daten, setDaten }) {
   const [filterBs, setFilterBs] = useState(() => daten.baustellen.find(b => b.status === 'laufend')?.id ?? 'alle')
   const [bereich, setBereich] = useState('Allgemein')
   const [notiz, setNotiz] = useState('')
@@ -61,7 +74,7 @@ export default function Fotos({ daten, setDaten }) {
         </div>
         <div className="knopfreihe">
           <label className={'knopf primaer' + (filterBs === 'alle' ? ' gesperrt' : '')}>
-            {laedt ? 'Fotos werden verkleinert …' : 'Fotos aufnehmen oder auswählen'}
+            {laedt ? '…' : t('Fotos aufnehmen oder auswählen')}
             <input type="file" accept="image/*" multiple hidden onChange={hochladen} disabled={filterBs === 'alle'} />
           </label>
           {filterBs === 'alle' && <span className="leise">Wähle oben eine Baustelle.</span>}
@@ -78,7 +91,7 @@ export default function Fotos({ daten, setDaten }) {
               {liste.filter(x => x.datum === t).map(x => (
                 <button key={x.id} className="galerie-bild" onClick={() => setGross(x)}>
                   <img src={x.bild} alt={`${x.bereich} ${x.notiz}`} loading="lazy" />
-                  <span>{x.bereich}{filterBs === 'alle' ? `, ${bs(x.baustelleId)}` : ''}</span>
+                  <span>{x.fuerKunde ? '👁 ' : ''}{x.bereich}{filterBs === 'alle' ? `, ${bs(x.baustelleId)}` : ''}</span>
                 </button>
               ))}
             </div>
@@ -97,6 +110,14 @@ export default function Fotos({ daten, setDaten }) {
               aria-label="Notiz"
               onChange={e => { const v = e.target.value; setGross({ ...gross, notiz: v }); upd(setDaten, 'fotos', gross.id, { notiz: v }) }}
             />
+            <label className="recht">
+              <input
+                type="checkbox"
+                checked={!!gross.fuerKunde}
+                onChange={e => { const v = e.target.checked; setGross({ ...gross, fuerKunde: v }); upd(setDaten, 'fotos', gross.id, { fuerKunde: v }) }}
+              />
+              <span><b>Für den Bauherrn sichtbar</b><span className="leise">erscheint im Bauherren-Link dieser Baustelle</span></span>
+            </label>
             <div className="knopfreihe">
               <a className="knopf" href={gross.bild} download={`foto_${gross.datum}.jpg`}>Herunterladen</a>
               <button onClick={() => setGross(null)}>Schließen</button>

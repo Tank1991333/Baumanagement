@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import Aufmass from './Aufmass.jsx'
 import { add, upd, del, heute, fmtDatum, fmtStd, zahl, esc, absatz, drucken, unterschriftHtml } from '../store'
-import { Feld, Kopf, Leer, Formular, Signatur, Zeilen, BaustellenAuswahl } from '../ui.jsx'
+import { Feld, Kopf, Leer, Formular, Signatur, Zeilen, BaustellenAuswahl, TextFeld } from '../ui.jsx'
 
 const STATUS = { offen: 'Nicht unterschrieben', unterschrieben: 'Unterschrieben', abgerechnet: 'Abgerechnet' }
 
-export default function Regie({ daten, setDaten, rechte }) {
+export function RegieBereich({ daten, setDaten, rechte }) {
   const [form, setForm] = useState(null)
   const [filterBs, setFilterBs] = useState('alle')
   const f = k => e => setForm({ ...form, [k]: e.target.value })
@@ -49,7 +50,7 @@ export default function Regie({ daten, setDaten, rechte }) {
       <p><b>Summe: ${esc(fmtStd(summe(r)))}</b></p>
       <h2>Material</h2>${tabelle(['Bezeichnung', 'Menge', 'Einheit'], (r.material || []).map(m => [m.bezeichnung, m.menge, m.einheit]))}
       <h2>Geräte und Maschinen</h2>${tabelle(['Gerät', 'Stunden'], (r.geraete || []).map(g => [g.bezeichnung, g.stunden]))}
-      <p style="font-size:9pt;margin-top:18px">Mit der Unterschrift bestätigt der Auftraggeber Art und Umfang der ausgeführten Leistungen. Die Vergütung richtet sich nach dem Vertrag bzw. den vereinbarten Stundenlohnsätzen.</p>
+      <p style="font-size:9pt;margin-top:18px">Mit der Unterschrift bestätigt der Auftraggeber Art und Umfang der ausgeführten Regieleistungen. Die Vergütung richtet sich nach dem Vertrag bzw. den vereinbarten Regiesätzen (ÖNORM B 2110).</p>
       <div class="sig">${unterschriftHtml(r.unterschrift, 'Auftraggeber: ' + (r.unterschriftName || ''))}<div style="height:74px"></div></div>`, daten.firma)
   }
 
@@ -77,9 +78,7 @@ export default function Regie({ daten, setDaten, rechte }) {
           </Feld>
           <Feld label="Datum"><input type="date" value={form.datum} onChange={f('datum')} /></Feld>
           <Feld label="Angeordnet von"><input value={form.anordnung} onChange={f('anordnung')} placeholder="z. B. Bauherr, Architekt" /></Feld>
-          <Feld label="Ausgeführte Arbeiten *" breit>
-            <textarea rows="3" value={form.beschreibung} onChange={f('beschreibung')} placeholder="Was wurde zusätzlich gemacht, wo und warum?" />
-          </Feld>
+          <TextFeld label="Ausgeführte Arbeiten *" value={form.beschreibung} onChange={v => setForm(x => ({ ...x, beschreibung: v }))} placeholder="Was wurde zusätzlich gemacht, wo und warum?" />
           <div className="feld breit">
             <span>Arbeitskräfte und Stunden</span>
             <Zeilen zeilen={form.arbeit} onChange={arbeit => setForm({ ...form, arbeit })} neu={{ name: '', stunden: '' }}
@@ -125,6 +124,17 @@ export default function Regie({ daten, setDaten, rechte }) {
           ))}
         </ul>
       )}
+    </>
+  )
+}
+
+export default function Regie(props) {
+  return (
+    <>
+      <RegieBereich {...props} />
+      <section className="block">
+        <Aufmass {...props} />
+      </section>
     </>
   )
 }

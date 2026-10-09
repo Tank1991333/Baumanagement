@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { add, upd, del, neuLeer, migrieren, heute, fmtDatum, herunterladen } from '../store'
 import { syncVerfuegbar, registrieren, anmelden, abmelden, firmaLaden, firmaAnlegen, firmaBeitreten, mitgliederLaden, mitgliedAendern, mitgliedEntfernen } from '../sync'
 import { Feld, Kopf, Leer, Formular } from '../ui.jsx'
+import Unterweisungen from './Unterweisungen.jsx'
+import { t, SPRACHEN } from '../i18n'
 
-const ROLLEN = ['Bauleiter', 'Polier', 'Vorarbeiter', 'Facharbeiter', 'Helfer', 'Azubi', 'Büro']
-const NEU = { name: '', rolle: 'Facharbeiter', telefon: '', personalnummer: '', stundensatz: '', unterweisung: '', aktiv: true }
+const ROLLEN = ['Bauleiter', 'Polier', 'Vorarbeiter', 'Facharbeiter', 'Helfer', 'Lehrling', 'Büro']
+const NEU = { name: '', rolle: 'Facharbeiter', telefon: '', personalnummer: '', stundensatz: '', unterweisung: '', aktiv: true, wochenstunden: '39', kontoStart: '', startSaldo: '' }
 
 function Konto({ daten, setDaten, konto, setKonto, sync, jetztSync }) {
   const [email, setEmail] = useState('')
@@ -38,14 +40,14 @@ function Konto({ daten, setDaten, konto, setKonto, sync, jetztSync }) {
   if (!konto)
     return (
       <form className="formular" onSubmit={e => { e.preventDefault(); los(async () => { await anmelden(email, pw); await verbinden(firmaLaden) }) }}>
-        <h3>Anmelden</h3>
+        <h3>{t('Anmelden')}</h3>
         <div className="raster">
           <Feld label="E-Mail"><input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></Feld>
           <Feld label="Passwort"><input type="password" autoComplete="current-password" required minLength={6} value={pw} onChange={e => setPw(e.target.value)} /></Feld>
         </div>
         {meldung && <p className="meldung" role="alert">{meldung}</p>}
         <div className="knopfreihe">
-          <button type="submit" className="primaer" disabled={laedt}>Anmelden</button>
+          <button type="submit" className="primaer" disabled={laedt}>{t('Anmelden')}</button>
           <button type="button" disabled={laedt} onClick={() => {
             if (!email || pw.length < 6) return setMeldung('E-Mail und ein Passwort mit mindestens 6 Zeichen eingeben.')
             los(async () => {
@@ -53,7 +55,7 @@ function Konto({ daten, setDaten, konto, setKonto, sync, jetztSync }) {
               if (!s) return setMeldung('Konto erstellt. Bitte den Link in der E-Mail bestätigen und dann anmelden.')
               setKonto({ ...s })
             })
-          }}>Konto erstellen</button>
+          }}>{t('Konto erstellen')}</button>
         </div>
       </form>
     )
@@ -86,7 +88,7 @@ function Konto({ daten, setDaten, konto, setKonto, sync, jetztSync }) {
       <dl className="fakten">
         <dt>Angemeldet</dt><dd>{konto.email}</dd>
         <dt>Rolle</dt><dd>{f.rolle === 'chef' ? 'Chef / Büro' : 'Mitarbeiter'}</dd>
-        <dt>Abgleich</dt><dd>{sync.zustand === 'fehler' ? sync.text : sync.zeit ? `zuletzt ${sync.zeit.toLocaleTimeString('de-DE')}` : '…'}</dd>
+        <dt>Abgleich</dt><dd>{sync.zustand === 'fehler' ? sync.text : sync.zeit ? `zuletzt ${sync.zeit.toLocaleTimeString('de-AT')}` : '…'}</dd>
         {f.code_team && (<><dt>Code für Mitarbeiter</dt><dd><code>{f.code_team}</code></dd></>)}
         {f.code_chef && (<><dt>Code für Büro/Chefs</dt><dd><code>{f.code_chef}</code></dd></>)}
       </dl>
@@ -314,6 +316,9 @@ export default function Team(props) {
               <Feld label="Personalnummer"><input value={form.personalnummer ?? ''} onChange={f('personalnummer')} /></Feld>
               <Feld label="Kostensatz €/h (Nachkalkulation)"><input inputMode="decimal" value={form.stundensatz ?? ''} onChange={f('stundensatz')} /></Feld>
               <Feld label="Letzte Sicherheitsunterweisung"><input type="date" value={form.unterweisung ?? ''} onChange={f('unterweisung')} /></Feld>
+              <Feld label="Wochenstunden (Bau-KV 39)"><input inputMode="decimal" value={form.wochenstunden ?? ''} onChange={f('wochenstunden')} /></Feld>
+              <Feld label="Stundenkonto ab"><input type="date" value={form.kontoStart ?? ''} onChange={f('kontoStart')} /></Feld>
+              <Feld label="Anfangssaldo (h, z. B. -4 oder 12,5)"><input inputMode="decimal" value={form.startSaldo ?? ''} onChange={f('startSaldo')} /></Feld>
               <Feld label="Status">
                 <select value={form.aktiv === false ? 'nein' : 'ja'} onChange={e => setForm({ ...form, aktiv: e.target.value === 'ja' })}>
                   <option value="ja">Aktiv</option><option value="nein">Ausgeschieden</option>
@@ -358,6 +363,12 @@ export default function Team(props) {
         </section>
       )}
 
+      {chef && (
+        <section className="block">
+          <Unterweisungen {...props} />
+        </section>
+      )}
+
       <section className={'block' + (chef ? '' : ' erster')}>
         <Kopf titel="Firma und Konto" />
         <Konto {...props} />
@@ -371,6 +382,11 @@ export default function Team(props) {
               <input value={daten.firma} onChange={e => setDaten(d => ({ ...d, firma: e.target.value }))} />
             </Feld>
           )}
+          <Feld label="Sprache">
+            <select value={props.sprache} onChange={e => props.setSprache(e.target.value)}>
+              {SPRACHEN.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+            </select>
+          </Feld>
           <Feld label="Darstellung">
             <select value={thema} onChange={e => setThema(e.target.value)}>
               <option value="auto">Wie das Gerät</option>
@@ -379,6 +395,16 @@ export default function Team(props) {
             </select>
           </Feld>
         </div>
+        {chef && (
+          <label className="recht gps">
+            <input type="checkbox" checked={!!daten.einstellungen.gpsStempeln} onChange={e => {
+              const an = e.target.checked
+              if (an && !confirm('Standort beim Stempeln speichern?\n\nIn Österreich ist das eine Kontrollmaßnahme: Mit Betriebsrat braucht es eine Betriebsvereinbarung, ohne Betriebsrat die Zustimmung jedes Mitarbeiters. Informiere dein Team vorher.')) return
+              setDaten(d => ({ ...d, einstellungen: { ...d.einstellungen, gpsStempeln: an } }))
+            }} />
+            <span><b>Standort beim Ein- und Ausstempeln speichern</b><span className="leise">zeigt, ob jemand auf der Baustelle gestempelt hat. Nur einmal pro Stempelvorgang, keine laufende Ortung.</span></span>
+          </label>
+        )}
         {chef && (
           <>
             <p className="fussnote">Eine Datensicherung enthält alles inklusive Fotos. Ohne Cloud-Konto liegen die Daten nur auf diesem Gerät, also regelmäßig sichern.</p>

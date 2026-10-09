@@ -1,27 +1,56 @@
 import { useState } from 'react'
-import { add, upd, del, heute, fmtDatum, fmtEuro, zahl } from '../store'
+import { add, upd, del, heute, fmtDatum, fmtEuro, zahl, bildKomprimieren } from '../store'
+import { lieferscheinLesen } from '../ocr'
+import { t } from '../i18n'
 import { Feld, Kopf, Leer, Formular, BaustellenAuswahl } from '../ui.jsx'
 
 const BSTATUS = { offen: 'Angefragt', bestellt: 'Bestellt', geliefert: 'Geliefert' }
 const NAECHSTER = { offen: 'bestellt', bestellt: 'geliefert', geliefert: 'offen' }
-const NEU_B = { artikel: '', menge: '', einheit: 'Stk.', lieferant: '', liefertermin: '', status: 'offen', preis: '', notiz: '', von: '' }
+const NEU_B = { artikel: '', menge: '', einheit: 'Stk.', lieferant: '', liefertermin: '', status: 'offen', preis: '', notiz: '', von: '', lieferscheinNr: '', lieferscheinFoto: '', lieferscheinText: '' }
 const NEU_G = { name: '', inventarnr: '', standort: 'lager', naechstePruefung: '', notiz: '' }
 
 export default function Material({ daten, setDaten, rechte, ich }) {
   const [bForm, setBForm] = useState(null)
   const [gForm, setGForm] = useState(null)
   const [nurOffen, setNurOffen] = useState(true)
+  const [ocr, setOcr] = useState('')
+
+  const lieferschein = async e => {
+    const datei = e.target.files?.[0]
+    e.target.value = ''
+    if (!datei) return
+    try {
+      setOcr('Foto wird vorbereitet …')
+      const fuerText = await bildKomprimieren(datei, 2000, 0.85)
+      const klein = await bildKomprimieren(datei, 1200, 0.7)
+      setBForm(x => ({ ...x, lieferscheinFoto: klein, status: 'geliefert' }))
+      setOcr('Text wird erkannt … (beim ersten Mal etwas länger)')
+      const erg = await lieferscheinLesen(fuerText, p => setOcr(`Text wird erkannt … ${p} %`))
+      setBForm(x => ({
+        ...x,
+        lieferscheinText: erg.text,
+        lieferscheinNr: x.lieferscheinNr || erg.nummer,
+        liefertermin: erg.datum || x.liefertermin,
+      }))
+      setOcr(erg.nummer || erg.datum ? 'Erkannt. Bitte Nummer und Datum kurz prüfen.' : 'Text erkannt, aber keine Nummer gefunden. Bitte von Hand ergänzen.')
+    } catch (err) {
+      setOcr(err.message || 'Texterkennung fehlgeschlagen. Das Foto ist trotzdem gespeichert.')
+    }
+  }
   const bs = id => (id === 'lager' ? 'Lager / Bauhof' : daten.baustellen.find(b => b.id === id)?.name ?? '–')
   const fb = k => e => setBForm({ ...bForm, [k]: e.target.value })
   const fg = k => e => setGForm({ ...gForm, [k]: e.target.value })
   const h = heute()
 
-  const neueBestellung = () =>
+  const neueBestellung = () => {
+    setOcr('')
     setBForm({
+      ...NEU_B,
       baustelleId: daten.baustellen.find(b => b.status === 'laufend')?.id ?? daten.baustellen[0]?.id ?? '',
       artikel: '', menge: '', einheit: 'Stk.', lieferant: '', liefertermin: '', status: 'offen', preis: '', notiz: '',
       von: ich?.name ?? '',
     })
+  }
 
   const bSpeichern = e => {
     e.preventDefault()
@@ -48,7 +77,7 @@ export default function Material({ daten, setDaten, rechte, ich }) {
           <option value="offen">Noch nicht geliefert</option>
           <option value="alle">Alle</option>
         </select>
-        {!bForm && daten.baustellen.length > 0 && <button className="primaer" onClick={neueBestellung}>Material anfragen</button>}
+        {!bForm && daten.baustellen.length > 0 && <button className="primaer" onClick={neueBestellung}>{t('Material anfragen')}</button>}
       </Kopf>
 
       {bForm && (
@@ -77,6 +106,26 @@ export default function Material({ daten, setDaten, rechte, ich }) {
           {rechte.kosten && <Feld label="Preis netto gesamt (€)"><input inputMode="decimal" value={bForm.preis} onChange={fb('preis')} /></Feld>}
           <Feld label="Angefragt von"><input value={bForm.von} onChange={fb('von')} /></Feld>
           <Feld label="Hinweis" breit><input value={bForm.notiz} onChange={fb('notiz')} placeholder="z. B. Abladen mit Kran, Zufahrt über Hof" /></Feld>
+          <fieldset className="feld breit schlechtwetter">
+            <legend>Lieferschein</legend>
+            <div className="knopfreihe eng">
+              <label className="knopf klein">
+                Lieferschein fotografieren
+                <input type="file" accept="image/*" capture="environment" hidden onChange={lieferschein} />
+              </label>
+              {ocr && <span className="leise">{ocr}</span>}
+            </div>
+            <div className="raster">
+              <Feld label="Lieferschein-Nr."><input value={bForm.lieferscheinNr} onChange={fb('lieferscheinNr')} /></Feld>
+            </div>
+            {bForm.lieferscheinFoto && <img className="foto" src={bForm.lieferscheinFoto} alt="Lieferschein" />}
+            {bForm.lieferscheinText && (
+              <details>
+                <summary className="leise">Erkannter Text</summary>
+                <pre className="ocr-text">{bForm.lieferscheinText}</pre>
+              </details>
+            )}
+          </fieldset>
         </Formular>
       )}
 
@@ -98,8 +147,9 @@ export default function Material({ daten, setDaten, rechte, ich }) {
                   {b.liefertermin ? `, ${fmtDatum(b.liefertermin)}` : ''}
                   {b.lieferant ? `, ${b.lieferant}` : ''}
                   {b.von ? `, von ${b.von}` : ''}
+                  {b.lieferscheinNr ? `, LS ${b.lieferscheinNr}` : b.lieferscheinFoto ? ', Lieferschein-Foto' : ''}
                 </span>
-                <button className="klein rechts" onClick={() => setBForm({ ...NEU_B, ...b })}>Bearbeiten</button>
+                <button className="klein rechts" onClick={() => { setOcr(''); setBForm({ ...NEU_B, ...b }) }}>Bearbeiten</button>
               </li>
             ))}
           </ul>
@@ -123,7 +173,7 @@ export default function Material({ daten, setDaten, rechte, ich }) {
           >
             <Feld label="Bezeichnung *" breit><input required value={gForm.name} onChange={fg('name')} placeholder="z. B. Minibagger 1,8 t" /></Feld>
             <Feld label="Inventarnummer"><input value={gForm.inventarnr} onChange={fg('inventarnr')} /></Feld>
-            <Feld label="Nächste Prüfung (UVV, DGUV V3)"><input type="date" value={gForm.naechstePruefung} onChange={fg('naechstePruefung')} /></Feld>
+            <Feld label="Nächste Prüfung (AM-VO, Elektro)"><input type="date" value={gForm.naechstePruefung} onChange={fg('naechstePruefung')} /></Feld>
             <Feld label="Notiz" breit><input value={gForm.notiz} onChange={fg('notiz')} /></Feld>
           </Formular>
         )}

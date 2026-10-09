@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { heute, wochenStart, fmtStd, uhrzeit, erinnerungen } from '../store'
+import { heute, wochenStart, fmtStd, uhrzeit, erinnerungen, feiertag, abwesendAm } from '../store'
+import { t } from '../i18n'
 import { Kopf, Leer } from '../ui.jsx'
 
 function suchen(d, q) {
@@ -69,8 +70,9 @@ export default function Uebersicht({ daten, gehe, rolle, rechte, ich }) {
         </section>
       ) : (
         <>
+          {feiertag(h) && <p className="einsatz">Heute ist {feiertag(h)}.</p>}
           {meinPlan && (
-            <p className="einsatz">Heute eingeplant: <strong>{bs(meinPlan.baustelleId)}</strong></p>
+            <p className="einsatz">{t('Heute eingeplant')}: <strong>{bs(meinPlan.baustelleId)}</strong></p>
           )}
 
           <section className="kennzahlen">
@@ -109,7 +111,7 @@ export default function Uebersicht({ daten, gehe, rolle, rechte, ich }) {
                   <li key={s.id} className="zeile">
                     <span className="punkt-gruen" aria-hidden="true" />
                     <strong>{name(s.mitarbeiterId)}</strong>
-                    <span className="leise">{bs(s.baustelleId)}, seit {uhrzeit(s.start)} Uhr</span>
+                    <span className="leise">{bs(s.baustelleId)}, {t('seit')} {uhrzeit(s.start)}</span>
                   </li>
                 ))}
               </ul>
@@ -119,6 +121,20 @@ export default function Uebersicht({ daten, gehe, rolle, rechte, ich }) {
               </Leer>
             )}
           </section>
+
+          {rechte.planen && daten.mitarbeiter.some(m => m.aktiv !== false && abwesendAm(daten, m.id, h)) && (
+            <section className="block">
+              <Kopf titel="Heute abwesend" />
+              <ul className="liste">
+                {daten.mitarbeiter.filter(m => m.aktiv !== false && abwesendAm(daten, m.id, h)).map(m => (
+                  <li key={m.id} className="zeile">
+                    <strong>{m.name}</strong>
+                    <span className="leise">{t(abwesendAm(daten, m.id, h).art || 'Abwesend')}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {ohneBericht.length > 0 && (
             <section className="block">

@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { add, upd, del, fmtStd, fmtDatum, fmtEuro, zahl } from '../store'
+import { add, upd, del, fmtStd, fmtDatum, fmtEuro, zahl, zufall } from '../store'
+import { koordinatenAusAdresse, aktuellerStandort } from '../wetter'
+import { syncVerfuegbar } from '../sync'
 import { Feld, Kopf, Leer, Formular } from '../ui.jsx'
 
-const NEU = { name: '', adresse: '', kunde: '', ansprechpartner: '', telefon: '', start: '', ende: '', status: 'laufend', notiz: '', angebot: '', sollStunden: '' }
+const NEU = { name: '', adresse: '', kunde: '', ansprechpartner: '', telefon: '', start: '', ende: '', status: 'laufend', notiz: '', angebot: '', sollStunden: '', lat: null, lon: null, fortschritt: '', kundenInfo: '', kundenFreigabe: false, kundenToken: '' }
 const STATUS = { geplant: 'Geplant', laufend: 'Laufend', abgeschlossen: 'Abgeschlossen' }
 
 function nachkalkulation(d, b) {
@@ -26,10 +28,35 @@ function Balken({ ist, soll }) {
   )
 }
 
-export default function Baustellen({ daten, setDaten, rechte }) {
+export default function Baustellen({ daten, setDaten, rechte, konto }) {
   const [form, setForm] = useState(null)
   const [filter, setFilter] = useState('laufend')
   const f = k => e => setForm({ ...form, [k]: e.target.value })
+  const [ortInfo, setOrtInfo] = useState('')
+  const cloud = syncVerfuegbar && !!konto?.firma
+
+  const ortSetzen = async quelle => {
+    setOrtInfo('Wird ermittelt …')
+    try {
+      const o = quelle === 'gps' ? await aktuellerStandort() : await koordinatenAusAdresse(form.adresse)
+      setForm(x => ({ ...x, lat: o.lat, lon: o.lon }))
+      setOrtInfo(quelle === 'gps' ? `Standort übernommen (± ${o.genau} m)` : 'Aus der Adresse gefunden')
+    } catch (e) {
+      setOrtInfo(e.message)
+    }
+  }
+
+  const kundenLink = b => `${window.location.origin}${window.location.pathname}?bauherr=${b.kundenToken}`
+  const teilen = async b => {
+    const url = kundenLink(b)
+    try {
+      if (navigator.share) await navigator.share({ title: b.name, text: `Baufortschritt ${b.name}`, url })
+      else {
+        await navigator.clipboard.writeText(url)
+        alert('Link kopiert:\n' + url)
+      }
+    } catch { /* abgebrochen */ }
+  }
 
   const speichern = e => {
     e.preventDefault()
@@ -56,7 +83,7 @@ export default function Baustellen({ daten, setDaten, rechte }) {
           <option value="abgeschlossen">Abgeschlossen</option>
           <option value="alle">Alle</option>
         </select>
-        {!form && rechte.stammdaten && <button className="primaer" onClick={() => setForm({ ...NEU })}>Neue Baustelle</button>}
+        {!form && rechte.stammdaten && <button className="primaer" onClick={() => { setOrtInfo(''); setForm({ ...NEU }) }}>Neue Baustelle</button>}
       </Kopf>
 
       {form && (
@@ -82,6 +109,33 @@ export default function Baustellen({ daten, setDaten, rechte }) {
           {rechte.kosten && <Feld label="Auftragssumme netto (€)"><input inputMode="decimal" value={form.angebot} onChange={f('angebot')} /></Feld>}
           <Feld label="Kalkulierte Stunden"><input inputMode="decimal" value={form.sollStunden} onChange={f('sollStunden')} /></Feld>
           <Feld label="Notizen" breit><textarea rows="3" value={form.notiz} onChange={f('notiz')} /></Feld>
+          <fieldset className="feld breit schlechtwetter">
+            <legend>Standort (für Wetter und Stempel-Kontrolle)</legend>
+            <div className="knopfreihe eng">
+              <button type="button" className="klein" onClick={() => ortSetzen('gps')}>Hier bin ich gerade</button>
+              <button type="button" className="klein" disabled={!form.adresse} onClick={() => ortSetzen('adresse')}>Aus Adresse suchen</button>
+              <span className="leise">{ortInfo || (form.lat != null ? `${form.lat}, ${form.lon}` : 'noch kein Standort')}</span>
+            </div>
+          </fieldset>
+          {cloud && (
+            <fieldset className="feld breit schlechtwetter">
+              <legend>Bauherren-Link</legend>
+              <label className="recht">
+                <input
+                  type="checkbox"
+                  checked={!!form.kundenFreigabe}
+                  onChange={e => setForm({ ...form, kundenFreigabe: e.target.checked, kundenToken: form.kundenToken || zufall(24) })}
+                />
+                <span><b>Bauherr darf den Fortschritt sehen</b><span className="leise">nur Status, Fortschritt, Info-Text und freigegebene Fotos, keine Kosten</span></span>
+              </label>
+              {form.kundenFreigabe && (
+                <div className="raster">
+                  <Feld label="Fortschritt (%)"><input inputMode="numeric" value={form.fortschritt} onChange={f('fortschritt')} /></Feld>
+                  <Feld label="Info für den Bauherrn" breit><textarea rows="2" value={form.kundenInfo} onChange={f('kundenInfo')} placeholder="z. B. Nächste Woche: Dachstuhl, Kranaufstellung am Montag" /></Feld>
+                </div>
+              )}
+            </fieldset>
+          )}
         </Formular>
       )}
 
@@ -132,7 +186,10 @@ export default function Baustellen({ daten, setDaten, rechte }) {
                     </>
                   )}
                 </div>
-                {rechte.stammdaten && <button className="klein" onClick={() => setForm({ ...NEU, ...b })}>Bearbeiten</button>}
+                <div className="knopfreihe eng">
+                  {rechte.stammdaten && <button className="klein" onClick={() => { setOrtInfo(''); setForm({ ...NEU, ...b }); window.scrollTo(0, 0) }}>Bearbeiten</button>}
+                  {cloud && b.kundenFreigabe && b.kundenToken && <button className="klein" onClick={() => teilen(b)}>Bauherren-Link teilen</button>}
+                </div>
               </article>
             )
           })}
