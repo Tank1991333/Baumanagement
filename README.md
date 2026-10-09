@@ -1,65 +1,66 @@
 # Bau-App
 
-Werkzeug für Baufirmen mit 1 bis 100 Mitarbeitern. Läuft im Browser auf Handy, Tablet und PC, lässt sich wie eine App auf den Startbildschirm legen und funktioniert auch ohne Netz.
+Werkzeug für Baufirmen in Österreich mit 1 bis 100 Mitarbeitern. Läuft im Browser auf Handy, Tablet und PC, lässt sich wie eine App auf den Startbildschirm legen und funktioniert auch ohne Netz.
 
 ## Funktionen
 
-- **Übersicht:** Suche über alles, Erinnerungen (Fristen, Lieferungen, Geräteprüfungen, Unterweisungen), wer eingestempelt ist, fehlende Tagesberichte. Auf Wunsch als Mitteilung aufs Handy.
-- **Baustellen:** Adresse mit Navigation, Kunde, Telefon und **Nachkalkulation** (Stunden gegen Kalkulation, Lohn- und Materialkosten gegen Auftragssumme).
-- **Zeiten:** Stempeluhr mit Pausenabzug nach ArbZG, Vorschlag aus der Plantafel, Monatsliste, CSV und **Export fürs Lohnbüro** (Personalnummer, Tag, Stunden).
-- **Plantafel:** Wochenplanung wer wo arbeitet, Vorwoche übernehmen. Mitarbeiter sehen ihren eigenen Einsatzplan.
-- **Bautagebuch:** Tagesbericht mit Wetter, Anwesenden, Leistungen und Behinderungen, Druck als PDF.
-- **Mängel & Abnahme:** Mängel mit mehreren Fotos, Frist und Zuständigem. **Abnahmeprotokoll** mit Unterschrift beider Seiten.
-- **Regieberichte:** Zusatzarbeiten mit Stunden, Material und Geräten, **Unterschrift des Bauherrn auf dem Handy**, PDF.
-- **Fotos:** Fotodokumentation pro Baustelle und Bauabschnitt, als PDF druckbar.
-- **Material & Geräte:** Materialanfragen mit Status und Liefertermin, Geräteverzeichnis mit Standort und Prüfterminen.
-- **Team:** Mitarbeiter mit Personalnummer, Kostensatz und Unterweisungsdatum, Hell-/Dunkelmodus, Datensicherung.
+**Baustelle**
+- **Baustellen:** Adresse mit Navigation, Kunde, Nachkalkulation (Stunden und Kosten gegen Auftragssumme), Standort per GPS festlegen, Bauherren-Link.
+- **Bautagebuch:** Wetter automatisch (Open-Meteo), Anwesende aus Zeiterfassung und Plantafel, Diktieren per Sprache, Schlechtwetter-Ausfallstunden, Druck als PDF.
+- **Behinderungsanzeige:** aus dem Bautagebuch als fertiges Schreiben mit Bezug auf ÖNORM B 2110 und Vorbehalt von Mehrkosten und Fristverlängerung.
+- **Mängel & Übernahme:** Mängel mit Fotos und Frist, Übernahmeprotokoll nach ÖNORM B 2110 mit Unterschrift beider Seiten.
+- **Regie & Aufmaß:** Regieberichte mit Unterschrift des Bauherrn; Aufmaß mit Länge × Breite × Höhe × Anzahl und Abzügen, Druck und CSV.
+- **Fotos & Pläne:** Fotodokumentation pro Bauabschnitt (einzelne Fotos für den Bauherrn freigebbar), Pläne und Dokumente als PDF.
+- **Material & Geräte:** Materialanfragen, Lieferscheine fotografieren mit Texterkennung, Geräte mit Standort und Prüfterminen.
+
+**Personal**
+- **Zeiten:** Stempeluhr mit Pause nach § 11 AZG, optional mit Standort, Stundenkonto (Bau-KV 39 h, österreichische Feiertage), Export für Lohnverrechnung und Schlechtwetter-Auswertung für die BUAK.
+- **Plantafel:** Wocheneinteilung mit Urlaub, Krankenstand, Zeitausgleich und Schulung; Feiertage werden angezeigt.
+- **Team:** Personalnummer, Kostensatz, Wochenstunden, Unterweisungen nach § 14 ASchG mit Unterschrift, Rechte pro Person.
+- **Mehrsprachig:** Deutsch, Türkisch, Bosnisch/Kroatisch/Serbisch, Rumänisch, Polnisch, Ungarisch, Englisch. Die Bereiche für Arbeiter sind übersetzt; Büro-Funktionen und gedruckte Dokumente bleiben deutsch.
 
 ## Zwei Betriebsarten
 
-**Ohne Einrichtung:** Alles bleibt auf dem einen Gerät. Gut zum Ausprobieren oder für den Ein-Mann-Betrieb.
+**Ohne Einrichtung:** Alles bleibt auf dem einen Gerät. Gut zum Ausprobieren.
 
-**Mit Supabase (kostenlos):** Alle arbeiten auf denselben Daten, mit Login und Rollen (Chef/Büro und Mitarbeiter). Änderungen ohne Netz werden später automatisch abgeglichen.
+**Mit Supabase (kostenlos):** Alle arbeiten auf denselben Daten, mit Login und Rechten. Ohne Netz erfasste Änderungen werden später automatisch abgeglichen. Bauherren-Link und Pläne/Dokumente funktionieren nur in dieser Betriebsart.
 
 ### Supabase einrichten (ca. 10 Minuten)
 
 1. Auf supabase.com kostenlos registrieren und ein Projekt anlegen (Region Frankfurt).
-2. *SQL Editor → New query*, den Inhalt von `supabase.sql` einfügen, *Run*.
+2. *SQL Editor → New query*, den Inhalt von `supabase.sql` einfügen, *Run*. Das Skript legt auch den Dateispeicher für Pläne an. Bei einer älteren Version einfach erneut ausführen; Daten bleiben erhalten.
 3. *Authentication → Sign In / Providers → Email*: „Confirm email“ ausschalten, wenn Mitarbeiter sich ohne Bestätigungsmail anmelden sollen.
 4. *Project Settings → API*: „Project URL“ und „anon public key“ kopieren.
-5. Beim Hosting zwei Umgebungsvariablen eintragen (siehe `.env.example`): `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`. Danach neu veröffentlichen.
-6. In der App unter *Team → Firma und Konto*: Konto erstellen, Firma anlegen. Den Mitarbeiter-Code an das Team weitergeben.
+5. Beim Hosting die Umgebungsvariablen `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` eintragen (siehe `.env.example`) und neu veröffentlichen.
+6. In der App unter *Team → Firma und Konto*: Konto erstellen, Firma anlegen, den Mitarbeiter-Code weitergeben.
 7. Unter *Team → Wer sieht was* jedes Konto seinem Namen zuordnen und die Rechte festlegen.
 
-Wer eine ältere Version eingerichtet hat, führt `supabase.sql` einfach noch einmal aus. Vorhandene Daten bleiben erhalten.
+Kostenloser Tarif: 500 MB Datenbank und 1 GB Dateispeicher. Projekte, die eine Woche nicht benutzt werden, pausiert Supabase; sie lassen sich im Dashboard wieder starten.
 
 ### Wer sieht was
 
-Unter *Team → Wer sieht was* legt der Chef pro Konto fest:
-
 | Recht | Bedeutung |
 |---|---|
-| Chef / Büro | alles, inklusive Rechteverwaltung und Lohnexport |
+| Chef / Büro | alles, inklusive Rechteverwaltung, Unterweisungen und Lohnexport |
 | Kosten und Preise sehen | Stundensätze, Auftragssummen, Materialpreise, Nachkalkulation |
-| Zeiten aller Mitarbeiter | fremde Stunden sehen, nachtragen, korrigieren, für alle stempeln |
-| Plantafel bearbeiten | alle Mitarbeiter einteilen |
+| Zeiten aller Mitarbeiter | fremde Stunden sehen und bearbeiten, für alle stempeln |
+| Plantafel bearbeiten | einteilen, Abwesenheiten eintragen |
 | Baustellen und Geräte verwalten | anlegen, bearbeiten, löschen |
 
-Vorlagen: *Mitarbeiter* (nichts davon), *Polier* (Zeiten und Plantafel), *Bauleiter* (alles außer Chef). Ohne Rechte sieht man nur die eigenen Stunden und den eigenen Einsatzplan, dazu Baustellen, Mängel, Bautagebuch, Regieberichte, Fotos und Material ohne Preise.
+Die Datenbank prüft die Rechte selbst: Preise und fremde Stundenzettel werden nicht an Geräte ohne dieses Recht geschickt, unerlaubte Änderungen lehnt der Server ab.
 
-Die Rechte prüft die Datenbank, nicht nur die App: Preise und fremde Stundenzettel werden gar nicht erst an Geräte ohne dieses Recht geschickt, und unerlaubte Änderungen lehnt der Server ab. Werden Rechte entzogen, löscht die App beim nächsten Abgleich ihre lokale Kopie und lädt nur noch das Erlaubte.
+## Wichtige Hinweise
 
-Hinweise zum kostenlosen Tarif: 500 MB Datenbank reichen für viele tausend Fotos in der verkleinerten Form der App. Projekte, die eine Woche lang nicht benutzt werden, pausiert Supabase und sie müssen im Dashboard wieder gestartet werden.
+- **Standort beim Stempeln** ist standardmäßig aus. Der Chef schaltet es unter Team ein, jeder Mitarbeiter muss auf seinem Gerät zustimmen. Eine solche Kontrollmaßnahme kann in Österreich eine Betriebsvereinbarung oder die Zustimmung der Mitarbeiter erfordern. Vorher klären.
+- **Vorlagen** für Behinderungsanzeige, Übernahmeprotokoll und Regiebericht sind Muster. Bei hohen Summen oder Streit vorher fachlich prüfen lassen.
+- **Schlechtwetter-Export** ist eine Auswertung als Grundlage für die Meldung an die BUAK, kein offizielles Meldeformat.
+- **Texterkennung** für Lieferscheine lädt beim ersten Einsatz etwa 10 MB (Tesseract) und braucht dafür Internet.
 
 ## Veröffentlichen
 
-1. Neues Repository auf GitHub anlegen und den Ordnerinhalt hochladen (ohne `node_modules`).
-2. Hosting verbinden und das Repository importieren. Build: `npm run build`, Ausgabeordner: `dist`.
-   - **Vercel:** Der kostenlose Hobby-Tarif ist laut Vercel nur für private, nicht-kommerzielle Nutzung gedacht. Für den Firmenbetrieb den Pro-Tarif nehmen oder:
-   - **Cloudflare Pages** oder **Netlify:** kostenlose Tarife, die auch gewerblich genutzt werden dürfen. Beide erkennen Vite automatisch.
+1. Repository auf GitHub anlegen und den Ordnerinhalt hochladen (ohne `node_modules`).
+2. Hosting verbinden: **Cloudflare Pages** oder **Netlify** (kostenlos, gewerbliche Nutzung erlaubt). Vercel Hobby ist laut Vercel nur für nicht-kommerzielle Nutzung. Build: `npm run build`, Ausgabe: `dist`.
 3. Jeder Push auf GitHub aktualisiert die App.
-
-Auf dem Handy die Seite öffnen und „Zum Home-Bildschirm“ wählen.
 
 ## Lokal starten
 

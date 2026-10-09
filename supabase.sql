@@ -78,8 +78,13 @@ create or replace function fuer_mitglied(m mitglieder, p_sammlung text, p_daten 
     when p_daten is null then null
     when p_sammlung in ('zeiten', 'stempel') and not hat_recht(m, 'alleZeiten')
       and (p_daten ->> 'mitarbeiterId') is distinct from m.mitarbeiter_id then null
-    when hat_recht(m, 'kosten') then p_daten
-    else p_daten - sensible_felder(p_sammlung) end
+    else
+      (case when hat_recht(m, 'kosten') then p_daten else p_daten - sensible_felder(p_sammlung) end)
+      -- Art der Abwesenheit (z. B. Krankenstand) sehen nur Planende und die Person selbst
+      - (case when p_sammlung = 'abwesenheiten' and not hat_recht(m, 'planen')
+               and (p_daten ->> 'mitarbeiterId') is distinct from m.mitarbeiter_id
+          then array['art', 'notiz'] else array[]::text[] end)
+    end
 $$;
 
 create or replace function ist_chef(p_firma uuid) returns boolean
@@ -203,7 +208,9 @@ begin
 
     erlaubt := case
       when m.rolle = 'chef' then true
-      when s in ('mitarbeiter', 'meta') then false
+      when s in ('mitarbeiter', 'meta', 'unterweisungen') then false
+      when s = 'abwesenheiten' then hat_recht(m, 'planen')
+      when s = 'dokumente' then neu is not null or hat_recht(m, 'stammdaten')
       when s = 'baustellen' then hat_recht(m, 'stammdaten')
       when s = 'geraete' then hat_recht(m, 'stammdaten') or (vorhanden and neu is not null)
       when s = 'plan' then hat_recht(m, 'planen')
@@ -239,6 +246,64 @@ begin
 
   return abgelehnt;
 end $$;
+
+-- Bauherren-Link: öffentlich, aber nur mit geheimem Schlüssel und nur Freigegebenes --
+
+create index if not exists eintraege_kunden on eintraege ((daten ->> 'kundenToken')) where sammlung = 'baustellen';
+
+create or replace function kunden_ansicht(p_token text) returns json
+  language plpgsql security definer stable set search_path = public as $$
+declare b eintraege;
+begin
+  if p_token is null or length(p_token) < 16 then return null; end if;
+  select * into b from eintraege e
+    where e.sammlung = 'baustellen' and not e.geloescht
+      and e.daten ->> 'kundenToken' = p_token
+      and coalesce((e.daten ->> 'kundenFreigabe')::boolean, false)
+    limit 1;
+  if not found then return null; end if;
+  return json_build_object(
+    'firma', coalesce(
+      (select x.daten ->> 'name' from eintraege x where x.firma_id = b.firma_id and x.sammlung = 'meta' and x.id = 'firma' and not x.geloescht),
+      (select f.name from firmen f where f.id = b.firma_id)),
+    'baustelle', json_build_object(
+      'name', b.daten ->> 'name', 'status', b.daten ->> 'status', 'ende', b.daten ->> 'ende',
+      'fortschritt', b.daten ->> 'fortschritt', 'kundenInfo', b.daten ->> 'kundenInfo'),
+    'fotos', coalesce((
+      select json_agg(x order by x.datum desc) from (
+        select e.daten ->> 'datum' as datum, e.daten ->> 'bereich' as bereich, e.daten ->> 'notiz' as notiz, e.daten ->> 'bild' as bild
+        from eintraege e
+        where e.firma_id = b.firma_id and e.sammlung = 'fotos' and not e.geloescht
+          and e.daten ->> 'baustelleId' = b.id
+          and coalesce((e.daten ->> 'fuerKunde')::boolean, false)
+        order by e.daten ->> 'datum' desc
+        limit 40) x), '[]'::json));
+end $$;
+
+-- Dateispeicher für Pläne und Dokumente (Ordner = Firma) --------------------
+
+insert into storage.buckets (id, name, public) values ('dokumente', 'dokumente', false)
+  on conflict (id) do nothing;
+
+create or replace function darf_dateien(p_ordner text, p_loeschen boolean default false) returns boolean
+  language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from mitglieder m
+    where m.user_id = auth.uid() and m.firma_id::text = p_ordner
+      and (not p_loeschen or hat_recht(m, 'stammdaten')))
+$$;
+
+drop policy if exists "Bau-App Dateien lesen" on storage.objects;
+drop policy if exists "Bau-App Dateien hochladen" on storage.objects;
+drop policy if exists "Bau-App Dateien löschen" on storage.objects;
+create policy "Bau-App Dateien lesen" on storage.objects for select to authenticated
+  using (bucket_id = 'dokumente' and darf_dateien((storage.foldername(name))[1]));
+create policy "Bau-App Dateien hochladen" on storage.objects for insert to authenticated
+  with check (bucket_id = 'dokumente' and darf_dateien((storage.foldername(name))[1]));
+create policy "Bau-App Dateien löschen" on storage.objects for delete to authenticated
+  using (bucket_id = 'dokumente' and darf_dateien((storage.foldername(name))[1], true));
+
+grant execute on function kunden_ansicht(text) to anon, authenticated;
 
 -- Nur angemeldete Nutzer dürfen die Funktionen aufrufen
 revoke execute on function
